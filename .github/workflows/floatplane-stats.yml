@@ -1,0 +1,34 @@
+name: Floatplane Stats Collector
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  collect-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch Floatplane Stats
+        id: fetch
+        run: |
+          response=$(curl -s "https://www.floatplane.com/api/v3/creator/stats?id=59f94c0bdd241b70349eb72b")
+          echo "response=$response" >> $GITHUB_OUTPUT
+          subscribers=$(echo "$response" | jq -r '.subscribers')
+          posts=$(echo "$response" | jq -r '.posts')
+          echo "subscribers=$subscribers" >> $GITHUB_OUTPUT
+          echo "posts=$posts" >> $GITHUB_OUTPUT
+
+      - name: Store in Neon Database
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+        run: |
+          psql "$DATABASE_URL" <<EOF
+          INSERT INTO fp_account (id, subscribers, posts, time)
+          VALUES (
+            '59f94c0bdd241b70349eb72b',
+            ${{ steps.fetch.outputs.subscribers }},
+            ${{ steps.fetch.outputs.posts }},
+            NOW()
+          );
+          EOF
